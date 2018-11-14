@@ -412,8 +412,12 @@ class DottyLanguageServer extends LanguageServer
     implicit val ctx = driver.currentCtx
 
     val uriTrees = driver.openedTrees(uri)
+    val predicate = (tree: NameTree) => {
+      val sym = tree.symbol
+      sym.exists && !sym.isLocal && !sym.isPrimaryConstructor && !sym.is(Synthetic)
+    }
 
-    val defs = Interactive.namedTrees(uriTrees, includeReferences = false, _ => true)
+    val defs = Interactive.namedTrees(uriTrees, includeReferences = false, predicate)
     (for {
       d <- defs if !isWorksheetWrapper(d)
       info <- symbolInfo(d.tree.symbol, d.namePos, positionMapperFor(d.source))
