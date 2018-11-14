@@ -187,6 +187,12 @@ class CodeTester(projects: List[Project]) {
                     activeParam: Int): this.type =
     doAction(new SignatureHelp(marker, expected, activeSignature, activeParam))
 
+  def documentLink(marker: CodeMarker, expected: List[CodeRange]): this.type =
+    doAction(new DocumentLink(marker, expected))
+
+  def documentLinkResolve(range: CodeRange, expected: CodeRange): this.type =
+    doAction(new DocumentLinkResolve(range, expected))
+
   private def doAction(action: Action): this.type = {
     try {
       action.execute()(testServer, testServer.client, positions)

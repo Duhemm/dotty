@@ -10,6 +10,8 @@ import scala.Console.{BOLD, RESET, UNDERLINED}
 import scala.collection.immutable.ListMap
 import scala.util.matching.Regex
 
+import scala.tasty.util.Chars
+
 /**
  * A parsed doc comment.
  *
@@ -28,6 +30,37 @@ class ParsedComment(val comment: Comment) {
 
   /** An index that marks all sections boundaries */
   private lazy val tagIndex: List[Bounds] = CommentParsing.tagIndex(content)
+
+  lazy val groupedSections: Map[String, List[Bounds]] =
+    CommentParsing.groupedSections(content, tagIndex)
+
+  lazy val groupedCleanSections: Map[String, List[Bounds]] = {
+    groupedSections.mapValues(_.map { case (start, end) =>
+      var newStart = 0
+      var newEnd = end - start - 1
+      val sectionContent = content.slice(start, end)
+
+      // println("Orig section: [" + start + ", " + end + "]")
+      // println("---> " + sectionContent)
+
+      while (newStart < end && isWhitespace(sectionContent.charAt(newStart))) {
+        newStart += 1
+      }
+
+      while (/*{println("End @ '" + sectionContent.charAt(newEnd) + "'"); true} &&*/ newEnd > newStart && isWhitespace(sectionContent.charAt(newEnd))) {
+        newEnd -= 1
+      }
+
+      // println("Final section: [" + (start + newStart) + ", " + (start + newEnd) + "]")
+
+      // println("---> " + content.slice(start + newStart, start + newEnd))
+      (start + newStart, start + newEnd)
+    })
+  }
+
+  private def isWhitespace(char: Char): Boolean = {
+    Chars.isWhitespace(char) || char == '*' || char == '\r'
+  }
 
   /**
    * Maps a parameter name to the bounds of its doc
@@ -55,7 +88,6 @@ class ParsedComment(val comment: Comment) {
   def renderAsMarkdown(implicit ctx: Context): String = {
     val buf = new StringBuilder
     buf.append(mainDoc + System.lineSeparator + System.lineSeparator)
-    val groupedSections = CommentParsing.groupedSections(content, tagIndex)
 
     for {
       (tag, formatter) <- ParsedComment.knownTags

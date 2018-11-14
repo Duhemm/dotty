@@ -195,6 +195,8 @@ class DottyLanguageServer extends LanguageServer
     c.setWorkspaceSymbolProvider(true)
     c.setReferencesProvider(true)
     c.setImplementationProvider(true)
+    c.setDocumentLinkProvider(new DocumentLinkOptions(
+      /* resolveProvider = */ true))
     c.setCompletionProvider(new CompletionOptions(
       /* resolveProvider = */ false,
       /* triggerCharacters = */ List(".").asJava))
@@ -473,6 +475,134 @@ class DottyLanguageServer extends LanguageServer
     val signatureInfos = alternatives.flatMap(Signatures.toSignature)
 
     new SignatureHelp(signatureInfos.map(signatureToSignatureInformation).asJava, callableN, paramN)
+  }
+
+  override def documentLink(params: DocumentLinkParams) = computeAsync { cancelToken =>
+    val uri = new URI(params.getTextDocument.getUri)
+    val driver = driverFor(uri)
+    implicit val ctx = driver.currentCtx
+
+    val uriTrees = driver.openedTrees(uri)
+
+    val seenComments = mutable.Buffer.empty[(Symbol, ParsedComment)]
+
+    val traverser = new tpd.TreeTraverser {
+      override def traverse(tree: Tree)(implicit ctx: Context): Unit = {
+        tree match {
+          case md: MemberDef if !md.symbol.isPrimaryConstructor =>
+            ParsedComment.docOf(md.symbol).foreach(comment => seenComments += ((md.symbol, comment)))
+          case _ =>
+            ()
+        }
+        traverseChildren(tree)
+      }
+    }
+
+    uriTrees.foreach(t => traverser.traverse(t.tree))
+    //
+    // def staticPath(sym: Symbol): (String, List[String]) = {
+    //   if (sym.isStatic) (sym.fullName.toString, Nil)
+    //   else {
+    //     val (path, rest) = staticPath(sym.owner)
+    //     (path, sym.name.toString :: rest)
+    //   }
+    // }
+
+    val source = driver.openedFiles(uri)
+    val mapper = positionMapperFor(source)
+    val links = for {
+      (sym, comment) <- seenComments
+      (start, end) <- comment.groupedCleanSections.getOrElse("@see", Nil)
+      content = comment.content.slice(start, end)
+      position = Positions.Position(comment.comment.pos.start + start, comment.comment.pos.start + end)
+      sourcePos = SourcePosition(source, position)
+      sourceRange <- range(sourcePos, mapper)
+      symSourcePos = SourcePosition(source, sym.pos)
+      loc <- location(symSourcePos, positionMapperFor(source))
+    } yield new DocumentLink(sourceRange, null, Stuff(uri.toString, sourceRange, loc, content))
+
+    links.asJava
+  }
+
+  override def documentLinkResolve(params: DocumentLink) = computeAsync { cancelToken =>
+    params.getData match {
+      case xxx @ Stuff(uri, _, symPos, content) =>
+        val driver = driverFor(xxx.uri)
+        implicit val ctx = driver.currentCtx
+        val uriTrees = driver.openedTrees(xxx.uri)
+        val pos = sourcePosition(driver, xxx.uri, symPos.getRange.getStart)
+        val path = Interactive.pathTo(uriTrees, pos)
+        val stuff = resolve(content, path, ctx)
+
+        stuff match {
+          case None => params
+          case Some(sym) =>
+            println("sym = " + sym)
+            val xpos = dotty.tools.dotc.util.Positions.Position(sym.pos.start, sym.pos.start + sym.name.stripModuleClassSuffix.show.toString.length, sym.pos.start)
+            val sourcePos = SourcePosition(new SourceFile(sym.sourceFile, scala.io.Codec.UTF8), xpos)
+            val range =
+              new lsp4j.Range(
+                new lsp4j.Position(sourcePos.startLine, sourcePos.startColumn),
+                new lsp4j.Position(sourcePos.endLine, sourcePos.endColumn)
+              )
+            params.setRange(range)
+
+            val sourcePath = Option(sym.sourceFile) match {
+              case None => ???
+              case Some(virtual: dotty.tools.io.VirtualFile) =>
+                s"file://${virtual.path}"
+              case Some(file) =>
+                file.toURL.toURI.toString
+            }
+            params.setTarget(sourcePath)
+            params
+        }
+      // case _ =>
+      //   params
+    }
+  }
+
+  private def resolve(str: String, path: List[Tree], ctx: Context): Option[Symbol] = {
+    import scala.util.matching.Regex
+    val inClass = """#(.+?)""".r
+    val complete = """(.+?)#(.+?)""".r
+    val fqcn = """(.+?)""".r
+
+    implicit val pathCtx = Interactive.contextOfPath(path)(ctx)
+    str match {
+      case inClass(member) =>
+        val enclosing = Interactive.enclosingDefinitionInPath(path)
+        val sym = enclosing.symbol.owner
+        val denot = sym.info.member(member.toTermName.toSimpleName)
+        val syms = denot.alternatives.map(_.symbol).filter(_.exists).map(Interactive.sourceSymbol)
+        syms.headOption
+
+      case complete(fqcn, member) =>
+        val baseType = pathCtx.base.staticRef(fqcn.toTypeName)
+        val baseTerm = pathCtx.base.staticRef(fqcn.toTermName)
+
+        val typeSym = {
+          if (baseType.exists) {
+            None
+          } else {
+            None
+          }
+        }
+
+        val termSym = {
+          if (baseTerm.exists) {
+            None
+          } else {
+            None
+          }
+        }
+        (typeSym.toList ++ termSym.toList).headOption
+
+      case fqcn =>
+        val denot = pathCtx.base.staticRef(str.toTypeName)
+        val syms = denot.alternatives.map(_.symbol).filter(_.exists).map(Interactive.sourceSymbol)
+        syms.headOption
+    }
   }
 
   override def getTextDocumentService: TextDocumentService = this
@@ -806,5 +936,10 @@ object DottyLanguageServer {
     val info = new lsp4j.ParameterInformation(param.show)
     documentation.foreach(info.setDocumentation(_))
     info
+  }
+
+  case class Stuff(xuri: String, contentPos: lsp4j.Range, symPos: lsp4j.Location, content: String) {
+    def this() = this(null, null, null, null)
+    def uri: URI = new URI(xuri)
   }
 }
