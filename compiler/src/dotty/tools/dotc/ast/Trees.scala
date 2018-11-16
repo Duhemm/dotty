@@ -473,7 +473,7 @@ object Trees {
 
   /** name = arg, in a parameter list */
   case class NamedArg[-T >: Untyped] private[ast] (name: Name, arg: Tree[T])
-    extends Tree[T] {
+    extends NameTree[T] {
     type ThisTree[-T >: Untyped] = NamedArg[T]
   }
 

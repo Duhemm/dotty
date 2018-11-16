@@ -851,7 +851,35 @@ trait Applications extends Compatibility { self: Typer with Dynamic =>
       }
     app1 match {
       case Apply(Block(stats, fn), args) =>
-        tpd.cpy.Block(app1)(stats, tpd.cpy.Apply(app1)(fn, args))
+        val newArgs = args.zipWithIndex.map {
+          case (na @ NamedArg(name, value), index) =>
+            val newType = fn.tpe match {
+              case tp: TermLambda =>
+                tp.newParamRef(index)
+              case tp: ValueType =>
+                TermRef(tp, name)
+            }
+            na.withType(newType)
+          case (other, _) =>
+            other
+        }
+        tpd.cpy.Block(app1)(stats, tpd.cpy.Apply(app1)(fn, newArgs))
+      case app @ Apply(fun, args) =>
+        val newArgs = args.zipWithIndex.map {
+          case (na @ NamedArg(name, value), index) =>
+            val newType = fun.tpe match {
+              case tp: TermLambda =>
+                tp.newParamRef(index)
+              case tp: ValueType =>
+                TermRef(tp, name)
+            }
+            na.withType(newType)
+          case (other, _) =>
+            other
+        }
+        val res = tpd.cpy.Apply(app)(fun = fun, args = newArgs)
+        // res.args.foreach(t => println(t + " ---> " + t.tpe))
+        res
       case _ =>
         app1
     }

@@ -217,4 +217,36 @@ class ReferencesTest {
       .references(m1 to m2, List(m3 to m4), withDecl = false)
   }
 
+  @Test def referencesNamedArg0: Unit = {
+    code"""object O {
+             def foo(${m1}x${m2}: Int) = ???
+             foo(${m3}x${m4} = 1)
+           }""".withSource
+      .references(m1 to m2, List(m1 to m2, m3 to m4), withDecl = true)
+  }
+
+  @Test def referencesNamedArg: Unit = {
+    code"""object O {
+             case class User(${m1}name${m2}: String)
+             def greet(${m3}user${m4}: User) = "Hello, " + ${m5}user${m6}.${m7}name${m8}
+
+             val u = User(${m9}name${m10} = "John")
+             println(greet(${m11}user${m12} = u.copy(${m13}name${m14} = "Jack")))
+           }""".withSource
+      .references(m1 to m2, List(m1 to m2, m7 to m8, m9 to m10, m13 to m14), withDecl = true)
+      .references(m1 to m2, List(m7 to m8, m9 to m10, m13 to m14), withDecl = false)
+      .references(m3 to m4, List(m3 to m4, m5 to m6, m11 to m12), withDecl = true)
+      .references(m3 to m4, List(m5 to m6, m11 to m12), withDecl = false)
+      .references(m5 to m6, List(m3 to m4, m5 to m6, m11 to m12), withDecl = true)
+      .references(m5 to m6, List(m5 to m6, m11 to m12), withDecl = false)
+      .references(m7 to m8, List(m1 to m2, m7 to m8, m9 to m10, m13 to m14), withDecl = true)
+      .references(m7 to m8, List(m7 to m8, m9 to m10, m13 to m14), withDecl = false)
+      .references(m9 to m10, List(m1 to m2, m7 to m8, m9 to m10, m13 to m14), withDecl = true)
+      .references(m9 to m10, List(m7 to m8, m9 to m10, m13 to m14), withDecl = false)
+      .references(m11 to m12, List(m3 to m4, m5 to m6, m11 to m12), withDecl = true)
+      .references(m11 to m12, List(m5 to m6, m11 to m12), withDecl = false)
+      .references(m13 to m14, List(m1 to m2, m7 to m8, m9 to m10, m13 to m14), withDecl = true)
+      .references(m13 to m14, List(m7 to m8, m9 to m10, m13 to m14), withDecl = false)
+  }
+
 }

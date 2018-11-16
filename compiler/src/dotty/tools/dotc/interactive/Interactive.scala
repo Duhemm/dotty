@@ -320,6 +320,19 @@ object Interactive {
       new untpd.TreeTraverser {
         override def traverse(tree: untpd.Tree)(implicit ctx: Context) = {
           tree match {
+            case utree: untpd.NamedArg =>
+              val tree = utree.asInstanceOf[tpd.NamedArg]
+              println("tree                 " + tree)
+              println("type                 " + tree.tpe)
+              println("designator = " + tree.tpe.asInstanceOf[NamedType].designator)
+              println("symbol               " + tree.symbol)
+              println("hasType?             " + tree.hasType)
+              println("sym exists?          " + tree.symbol.exists)
+              println("sym no synth?        " + !tree.symbol.is(Synthetic))
+              println("pos exists?          " + tree.pos.exists)
+              println("pos no zero extent?  " + !tree.pos.isZeroExtent)
+              println("includeRef or isdef? " + (includeReferences || isDefinition(tree)))
+              println("predicate?           " + treePredicate(tree))
             case utree: untpd.NameTree if tree.hasType =>
               val tree = utree.asInstanceOf[tpd.NameTree]
               if (tree.symbol.exists
@@ -356,7 +369,22 @@ object Interactive {
     val includeReferences  = (includes & Include.references) != 0
     val includeDeclaration = (includes & Include.definitions) != 0
     val includeLinkedClass = (includes & Include.linkedClass) != 0
-    val predicate: NameTree => Boolean = tree =>
+    println("Trees:")
+    trees.foreach{t =>
+      if (t.source.toString.endsWith("Source0.scala")) {
+        println(t.tree.show)
+        println("------------")
+        println(t)
+      }
+    }
+    val predicate: NameTree => Boolean = tree => {
+      if (tree.isInstanceOf[tpd.NamedArg]) {
+        println("NamedArg --> " + tree)
+        println("tpe -> " + tree.tpe)
+        println("Sym -> " + tree.symbol)
+        println("#" * 181)
+        ???
+      } else println("nope: " + tree)
       (  !tree.symbol.isPrimaryConstructor
       && (includeDeclaration || !Interactive.isDefinition(tree))
       && (  Interactive.matchSymbol(tree, symbol, includes)
@@ -367,7 +395,9 @@ object Interactive {
             )
          )
       )
-    namedTrees(trees, includeReferences, predicate)
+    }
+    val xtrees = trees.filter(_.source.toString.endsWith("Source0.scala"))
+    namedTrees(xtrees, includeReferences, predicate)
   }
 
   /** The reverse path to the node that closest encloses position `pos`,

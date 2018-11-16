@@ -592,6 +592,8 @@ object Types {
           defn.ObjectType.findMember(name, pre, excluded)
         case err: ErrorType =>
           ctx.newErrorSymbol(pre.classSymbol orElse defn.RootClass, name, err.msg)
+        // case meth: MethodType if ctx.mode.is(Mode.Interactive) =>
+        //   ???
         case _ =>
           NoDenotation
       }

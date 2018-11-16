@@ -1880,6 +1880,7 @@ class Typer extends Namer
               else
                 typedTypeDef(tree, sym)(ctx.localContext(tree, sym).setNewScope)
             case tree: untpd.Labeled => typedLabeled(tree)
+            case tree: untpd.NamedArg => typedNamedArg(tree, pt)
             case _ => typedUnadapted(desugar(tree), pt, locked)
           }
         }
@@ -1891,7 +1892,6 @@ class Typer extends Namer
           case tree: untpd.Literal => typedLiteral(tree)
           case tree: untpd.New => typedNew(tree, pt)
           case tree: untpd.Typed => typedTyped(tree, pt)
-          case tree: untpd.NamedArg => typedNamedArg(tree, pt)
           case tree: untpd.Assign => typedAssign(tree, pt)
           case tree: untpd.Block => typedBlock(desugar.block(tree), pt)(ctx.fresh.setNewScope)
           case tree: untpd.If => typedIf(tree, pt)
