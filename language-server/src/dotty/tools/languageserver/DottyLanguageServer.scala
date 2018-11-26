@@ -200,6 +200,7 @@ class DottyLanguageServer extends LanguageServer
       /* triggerCharacters = */ List(".").asJava))
     c.setSignatureHelpProvider(new SignatureHelpOptions(
       /* triggerCharacters = */ List("(").asJava))
+    c.setExecuteCommandProvider(new ExecuteCommandOptions())
 
     // Do most of the initialization asynchronously so that we can return early
     // from this method and thus let the client know our capabilities.
@@ -523,6 +524,61 @@ class DottyLanguageServer extends LanguageServer
     new SignatureHelp(signatureInfos.map(signatureToSignatureInformation).asJava, callableN, paramN)
   }
 
+  override def executeCommand(params: ExecuteCommandParams) = computeAsync { canceltoken =>
+    supportedWorkspaceCommands.get(params.getCommand) match {
+      case None => throw new Exception(params.getCommand)
+      case Some(cmd) =>
+        // println("Arguments:")
+        val lst = params.getArguments.asScala.toList
+        cmd(lst)
+        // println("Classes: " + lst.map(_.getClass).mkString)
+        // params.getArguments.asScala.foreach(println)
+        // val gson = new com.google.gson.Gson()
+        // val xparams = lst.map(x => gson.fromJson(x.asInstanceOf[com.google.gson.JsonObject], classOf[ImplementAbstractMembersParams]))
+        // cmd(xparams)
+    }
+  }
+
+  private def implementAbstractMembersCommand(params: List[Object]): Object = params match {
+    // case (document: VersionedTextDocumentIdentifier) :: (position: TextDocumentPositionParams) :: Nil =>
+    case ImplementAbstractMembersParams(suri, position, version) :: Nil =>
+      val uri = new java.net.URI(suri)
+      val driver = driverFor(uri)
+      implicit val ctx = driver.currentCtx
+
+      val pos = sourcePosition(driver, uri, position)
+      val trees = driver.openedTrees(uri)
+      Interactive.pathTo(trees, pos) match {
+        case (td: TypeDef) :: _ if td.symbol.exists =>
+          val symbol = td.symbol
+          val abstractMembers = (symbol.info.abstractTypeMembers ++ symbol.info.abstractTermMembers).toList
+          val definitions = SynthesizeDefinition.definitionsFor(abstractMembers.map(_.symbol))
+          val position = td.pos
+          val indent = pos.lineContent.takeWhile(_ == ' ').length + 2
+          // println("Position = " + position)
+          // println("#" * 100)
+          // println(pos.source.content.slice(position.start, position.end).mkString(""))
+          // println("---> Should indent of: " + indent)
+          // println("#" * 100)
+          val insertPosition = position.endPos.shift(-1)
+          val insertRange = range(SourcePosition(driver.openedFiles(uri), insertPosition), None).get
+          val textEdit = new TextEdit(insertRange, definitions.lines.map(l => " " * indent + l).mkString(System.lineSeparator))
+          val versionedDocument = new VersionedTextDocumentIdentifier(uri.toString, version)
+          val documentEdit = new TextDocumentEdit(versionedDocument, List(textEdit).asJava)
+          val edit = new ApplyWorkspaceEditParams(new WorkspaceEdit(List(documentEdit).asJava), "implement abstract members")
+          client.applyEdit(edit)
+          // println("Should insert @ " + insertPosition)
+
+          new Object
+        case other =>
+          other.foreach(println)
+          ???
+      }
+
+    case _ =>
+      throw new IllegalArgumentException()
+  }
+
   override def getTextDocumentService: TextDocumentService = this
   override def getWorkspaceService: WorkspaceService = this
 
@@ -601,6 +657,10 @@ class DottyLanguageServer extends LanguageServer
       } yield action()
     }
   }
+
+  private val supportedWorkspaceCommands: Map[String, List[Object] => Object] = Map(
+    "implementAbstractMembers" -> implementAbstractMembersCommand
+  )
 }
 
 object DottyLanguageServer {
@@ -882,5 +942,9 @@ object DottyLanguageServer {
     val info = new lsp4j.ParameterInformation(param.show)
     documentation.foreach(info.setDocumentation(_))
     info
+  }
+
+  case class ImplementAbstractMembersParams(uri: String, position: lsp4j.Position, version: Int) {
+    def this() = this(null, null, 0)
   }
 }

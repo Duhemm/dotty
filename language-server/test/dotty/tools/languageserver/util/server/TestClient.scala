@@ -24,6 +24,7 @@ class TestClient extends WorksheetClient {
   val telemetry = new Log[Any]
   val worksheetOutput = new Log[WorksheetRunOutput]
   val requests = new Log[(ShowMessageRequestParams, CompletableFuture[MessageActionItem])]
+  val workspaceEdits = new Log[(ApplyWorkspaceEditParams, CompletableFuture[ApplyWorkspaceEditResponse])]
 
   override def logMessage(message: MessageParams) = {
     log += message
@@ -49,6 +50,12 @@ class TestClient extends WorksheetClient {
 
   override def publishOutput(output: WorksheetRunOutput) = {
     worksheetOutput += output
+  }
+
+  override def applyEdit(params: ApplyWorkspaceEditParams): CompletableFuture[ApplyWorkspaceEditResponse] = {
+    val reply = new CompletableFuture[ApplyWorkspaceEditResponse]
+    workspaceEdits += ((params, reply))
+    reply
   }
 
 }

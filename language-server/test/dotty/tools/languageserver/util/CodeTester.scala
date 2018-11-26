@@ -221,6 +221,9 @@ class CodeTester(projects: List[Project]) {
                     activeParam: Int): this.type =
     doAction(new SignatureHelp(marker, expected, activeSignature, activeParam))
 
+  def implementAbstractMembers(range: CodeRange, expected: Set[String], position: CodeMarker): this.type =
+    doAction(new ImplementAbstractMembers(range, expected, position))
+
   private def doAction(action: Action): this.type = {
     try {
       action.execute()(testServer, testServer.client, positions)

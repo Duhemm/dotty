@@ -76,6 +76,11 @@
     },
     "commands": [
       {
+        "command": "dotty.implement.abstract.members",
+        "title": "Implement abstract members",
+        "category": "Scala"
+      },
+      {
         "command": "dotty.worksheet.run",
         "title": "Run worksheet",
         "category": "Scala"

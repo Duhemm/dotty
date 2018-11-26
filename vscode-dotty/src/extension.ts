@@ -9,7 +9,8 @@ import { ChildProcess } from "child_process"
 import { ExtensionContext } from 'vscode'
 import * as vscode from 'vscode'
 import { LanguageClient, LanguageClientOptions, RevealOutputChannelOn,
-         ServerOptions } from 'vscode-languageclient'
+         ServerOptions,
+         ExecuteCommandRequest, ExecuteCommandParams, TextDocumentPositionParams } from 'vscode-languageclient'
 import { enableOldServerWorkaround } from './compat'
 import * as features from './features'
 
@@ -18,6 +19,7 @@ export let client: LanguageClient
 import * as rpc from 'vscode-jsonrpc'
 import * as sbtserver from './sbt-server'
 import { Tracer } from './tracer'
+import { asVersionedTextDocumentIdentifier } from './protocol';
 
 export const extensionName = 'dotty'
 const extensionConfig = vscode.workspace.getConfiguration(extensionName)
@@ -108,6 +110,18 @@ export function activate(context: ExtensionContext) {
         .then(_ => runLanguageServer(coursierPath, languageServerArtifactFile))
     }
   }
+
+  vscode.commands.registerCommand("dotty.implement.abstract.members", () => {
+    if (vscode.window.activeTextEditor) {
+      vscode.window.showInformationMessage("Will do the stuff...")
+      const editor = vscode.window.activeTextEditor
+      const document = editor.document
+      const position = editor.selection.active
+      implementStuff(document, position)
+    } else {
+      vscode.window.showInformationMessage("Fuck you")
+    }
+  })
 }
 
 /**
@@ -342,4 +356,24 @@ function run(serverOptions: ServerOptions, isOldServer: boolean) {
   // Push the disposable to the context's subscriptions so that the
   // client can be deactivated on extension deactivation
   extensionContext.subscriptions.push(client.start())
+}
+
+function implementStuff(textDocument: vscode.TextDocument, position: vscode.Position) {
+  const positionParams: TextDocumentPositionParams = {
+    textDocument: { uri: textDocument.uri.toString() },
+    position: position
+  }
+  const params: ExecuteCommandParams = {
+    command: "implementAbstractMembers",
+    arguments: [
+      {
+        uri: textDocument.uri.toString(),
+        position: position,
+        version: textDocument.version
+      }
+      // asVersionedTextDocumentIdentifier(textDocument),
+      // positionParams
+    ]
+  }
+  client.sendRequest(ExecuteCommandRequest.type, params)
 }

@@ -1,6 +1,14 @@
 package dotty.tools
 package languageserver
 
+abstract class Foobar {
+  def foo: Unit
+}
+
+class Hello extends Foobar {
+override def foo: Unit = ???
+}
+
 object Memory {
 
   /** Memory is judged to be critical if after a GC the amount of used memory
