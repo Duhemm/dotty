@@ -5,11 +5,13 @@ import Modes._
 import ScaladocGeneration._
 import com.jsuereth.sbtpgp.PgpKeys
 import sbt.Keys.*
+import sbt.nio.Keys.*
 import sbt.*
 import complete.DefaultParsers._
 import pl.project13.scala.sbt.JmhPlugin
 import pl.project13.scala.sbt.JmhPlugin.JmhKeys.Jmh
 import com.gradle.develocity.agent.sbt.DevelocityPlugin.autoImport._
+import com.gradle.develocity.agent.sbt.api.experimental
 import com.typesafe.sbt.packager.Keys._
 import com.typesafe.sbt.packager.MappingsHelper.directory
 import com.typesafe.sbt.packager.universal.UniversalPlugin
@@ -661,13 +663,24 @@ object Build {
     recur(lines)
   }
 
+  lazy val testFiles = Def.taskKey[Seq[java.nio.file.Path]]("...")
+
   // Settings shared between scala3-compiler and scala3-compiler-bootstrapped
   lazy val commonDottyCompilerSettings = Seq(
       // Note: bench/profiles/projects.yml should be updated accordingly.
       Compile / scalacOptions ++= Seq("-Yexplicit-nulls", "-Wsafe-init"),
 
+      testFiles := {
+        val tests = (ThisBuild / baseDirectory).value / "tests"
+        val files = tests.allPaths.get.map(_.toPath)
+        files
+      },
+
       // Use source 3.3 to avoid fatal migration warnings on scalajs-ir
       scalacOptions ++= Seq("-source", "3.3"),
+
+      Test / test / experimental.develocityTaskCacheKeyComponents += (testFiles / outputFileStamps).taskValue,
+      Test / testOnly / experimental.develocityInputTaskCacheKeyComponents += (testFiles / outputFileStamps).taskValue,
 
       // Generate compiler.properties, used by sbt
       (Compile / resourceGenerators) += Def.task {
